@@ -26,9 +26,6 @@ class MainActivity : AppCompatActivity() {
     lateinit var img_fon: ImageView
     lateinit var controll_panel: LinearLayout
 
-    //Потом удалить
-    lateinit var btn_scip: Button
-
     lateinit var tracks: Array<Track>
 
     var FILE_SELECT_CODE = 100
@@ -50,15 +47,13 @@ class MainActivity : AppCompatActivity() {
 
         tracks = arrayOf(Track(), Track())
 
-        // Find elements
+        // Определяет элементы
         btn_play = findViewById(R.id.btn_play)
         txt_crossfade_progress = findViewById(R.id.txt_crossfade_progress)
         txt_crossfade_max = findViewById(R.id.txt_crossfade_max)
         seek_cross_fade = findViewById(R.id.seek_cross_fade)
         img_fon = findViewById(R.id.img_fon)
         controll_panel = findViewById(R.id.controll_panel)
-
-        btn_scip = findViewById(R.id.btn_scip)
 
         // Скрывает панель управления, дожидаясь выбора треков
         controll_panel.visibility = View.INVISIBLE
@@ -82,7 +77,7 @@ class MainActivity : AppCompatActivity() {
         seek_cross_fade.progress = 6 - cross_fade_min
         txt_crossfade_progress.text = (seek_cross_fade.progress + cross_fade_min).toString() + "s"
 
-        // Set listeners
+        // Устанавливает собятия
         btn_play.setOnClickListener{ PlayPause() }
         tracks_items.forEachIndexed(){index, track_item ->
             track_item.btn_track_select.setOnClickListener { fileChooser(index) }
@@ -95,24 +90,23 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar) {}
             override fun onStopTrackingTouch(seekBar: SeekBar) {}
         })
-
-        btn_scip.setOnClickListener{
-            mediaPlayer_now.seekTo(mediaPlayer_now.duration - (11 * 1000))
-        }
     }
 
     override fun onPause() {
         super.onPause()
 
+        // Принудительно ставит на паузу
         if (playing){
             PlayPause()
         }
     }
 
+    // Получает текущий кроссфейд
     fun getGrossFade(): Int{
         return seek_cross_fade.progress + cross_fade_min
     }
 
+    // Играть / поставить на паузу
     fun PlayPause(){
         tracks.forEach() { track ->
             if (track.uri == Uri.EMPTY) {
@@ -138,6 +132,8 @@ class MainActivity : AppCompatActivity() {
             tracks_items.forEach {
                 it.btn_track_select.visibility = View.INVISIBLE
             }
+
+            // Скрывает элементы
             seek_cross_fade.visibility = View.INVISIBLE
             txt_crossfade_progress.visibility = View.INVISIBLE
             txt_crossfade_max.visibility = View.INVISIBLE
@@ -161,6 +157,8 @@ class MainActivity : AppCompatActivity() {
             tracks_items.forEach {
                 it.btn_track_select.visibility = View.VISIBLE
             }
+
+            // Показывает элементы
             seek_cross_fade.visibility = View.VISIBLE
             txt_crossfade_progress.visibility = View.VISIBLE
             txt_crossfade_max.visibility = View.VISIBLE
@@ -188,9 +186,7 @@ class MainActivity : AppCompatActivity() {
         createRunnableTrack(id)
     }
 
-
-
-
+    // Выбор трека
     fun fileChooser(btn_id: Int){
         intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
         intent.setType("audio/*")
@@ -206,10 +202,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Когда трек выбран, занесты его в реестр
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (resultCode == Activity.RESULT_OK){
             if(data != null){
-                // Get id trackbar
+                // Установить трек
                 setTrack((requestCode - FILE_SELECT_CODE), data.data!!)
             }else{
                 Toast.makeText(this, "Track was not selected", Toast.LENGTH_LONG).show()
@@ -218,6 +215,7 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
     }
 
+    // Заносит трек в список
     fun setTrack(id: Int, uri: Uri){
         tracks.set(id, Track(this, uri))
 
@@ -390,6 +388,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Запустить следующий трек
     fun setNextTrack(){
         //-------------------------- Time line --------------------------
         val la = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0f)
