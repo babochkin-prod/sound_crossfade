@@ -36,10 +36,13 @@ class MainActivity : AppCompatActivity() {
 
     var playing = false
     var handler = Handler()
+    lateinit var runnable: Runnable
 
     var id_track_now = 0
     lateinit var mediaPlayer_now: MediaPlayer
     lateinit var mediaPlayer_next: MediaPlayer
+
+    var currentPosition: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,6 +93,20 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar) {}
             override fun onStopTrackingTouch(seekBar: SeekBar) {}
         })
+
+        runnable = Runnable {
+            createRunnableTrack()
+            handler.removeCallbacks(runnable)
+            handler.postDelayed(runnable, 0)
+        }
+
+
+        //-------------------------- Time line --------------------------
+        // Для текущего трека
+        setTimeLine(id_track_now, 0, 1)
+        // Для следующего трека
+        setTimeLine(nextTrackId(id_track_now), 0, 1)
+        //---------------------------------------------------------------
     }
 
     override fun onPause() {
@@ -114,8 +131,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        playing = !playing
+
         // Set PLAY
-        if(!playing){
+        if(playing){
+            mediaPlayer_now.seekTo(currentPosition)
+
             // Смена картинки у кнопик
             btn_play.setImageDrawable(
                     ContextCompat.getDrawable(
@@ -123,10 +144,6 @@ class MainActivity : AppCompatActivity() {
                             R.drawable.ic_baseline_pause_24 // Drawable
                     )
             )
-
-            if(tracks[id_track_now].status == Track.STATUS_PAUSE){
-                setPlayTrack(id_track_now)
-            }
 
             // Показывает выбор файлов и cross fade
             tracks_items.forEach {
@@ -141,6 +158,8 @@ class MainActivity : AppCompatActivity() {
         // Set PAUSE
         else
         {
+            currentPosition = mediaPlayer_now.currentPosition
+
             // Смена картинки у кнопик
             btn_play.setImageDrawable(
                     ContextCompat.getDrawable(
@@ -148,10 +167,6 @@ class MainActivity : AppCompatActivity() {
                             R.drawable.ic_baseline_play_arrow_24 // Drawable
                     )
             )
-
-            if(tracks[id_track_now].status == Track.STATUS_PLAY){
-                setPauseTrack(id_track_now)
-            }
 
             // Скрывает выбор файлов и cross fade
             tracks_items.forEach {
@@ -163,27 +178,6 @@ class MainActivity : AppCompatActivity() {
             txt_crossfade_progress.visibility = View.VISIBLE
             txt_crossfade_max.visibility = View.VISIBLE
         }
-
-
-        playing = !playing
-    }
-
-
-    fun setPlayTrack(id: Int){
-        if (tracks[nextTrackId(id)].status == Track.STATUS_PAUSE){
-            tracks[nextTrackId(id)].status = Track.STATUS_PLAY
-        }
-        tracks[id].status = Track.STATUS_PLAY
-        createRunnableTrack(id)
-    }
-
-    fun setPauseTrack(id: Int){
-        if (tracks[nextTrackId(id)].status == Track.STATUS_PLAY){
-            tracks[nextTrackId(id)].status = Track.STATUS_PAUSE
-        }
-        tracks[id].status = Track.STATUS_PAUSE
-
-        createRunnableTrack(id)
     }
 
     // Выбор трека
@@ -246,11 +240,6 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Error opening file", Toast.LENGTH_LONG).show()
         }
 
-        // Действия при проигрывании трека
-        tracks[id].runnable = Runnable {
-            createRunnableTrack(id)
-        }
-
         // Действие при завершении трека
         mediaPlayer_now.setOnCompletionListener{
             setNextTrack()
@@ -258,67 +247,54 @@ class MainActivity : AppCompatActivity() {
 
 
         // Показывает панель управления, если выбраны оба трека
-        controll_panel.visibility = View.VISIBLE
+        var test_all_tracks = true
         tracks.forEach {
             if (it.uri == Uri.EMPTY){
-                controll_panel.visibility = View.INVISIBLE
+                test_all_tracks = false
             }
+        }
+        if (test_all_tracks){
+            handler.postDelayed(runnable, 1)
+            controll_panel.visibility = View.VISIBLE
+        }else{
+            handler.removeCallbacks(runnable)
+            controll_panel.visibility = View.INVISIBLE
         }
     }
 
     // Действия при проигрывании трека
-    fun createRunnableTrack(id: Int){
-        // Изменение громкости
-        if (id == id_track_now) {
-            var volume = 0f
-            // Начало кроссфейда
-            if (
-                    // Длина дорожки больше кроссфейда
-                    (mediaPlayer_now.duration > (getGrossFade() * 1000) &&
-                            (mediaPlayer_now.currentPosition < (getGrossFade() * 1000))
-                            ) ||
-                    // Длина дорожки меньше или равна кроссфейду
-                    (mediaPlayer_now.duration <= (getGrossFade() * 1000) &&
-                            (mediaPlayer_now.currentPosition <= (mediaPlayer_now.duration / 2))
-                            )
+    fun createRunnableTrack(){
+        tracks.forEach() { track ->
+            if (track.uri == Uri.EMPTY) {
+                return
+            }
+        }
 
-            ) {
-                if (mediaPlayer_now.duration > (getGrossFade() * 1000)){
-                    volume = (mediaPlayer_now.currentPosition) / (getGrossFade() * 1000).toFloat()
-                }else{
-                    volume = (mediaPlayer_now.currentPosition / (mediaPlayer_now.duration / 2)).toFloat()
-                }
+
+        // Изменение громкости
+        if (playing) {
+            var volume = 0f
+            var crossfade_value = (getGrossFade() * 1000)
+            if (crossfade_value > (mediaPlayer_now.duration / 2)){
+                crossfade_value = mediaPlayer_now.duration / 2
+            }
+            // Начало кроссфейда
+            if (mediaPlayer_now.currentPosition <= crossfade_value) {
+                volume = (mediaPlayer_now.currentPosition) / (crossfade_value).toFloat()
+                volume = volume * volume
                 mediaPlayer_now.setVolume(volume, volume)
                 if (mediaPlayer_next.isPlaying) {
                     mediaPlayer_next.setVolume(1f - volume, 1f - volume)
                 }
             }
             // Конец кроссфейда
-            else if (
-                    // Длина дорожки больше кроссфейда
-                    (mediaPlayer_now.duration > (getGrossFade() * 1000) &&
-                            (mediaPlayer_now.currentPosition > (mediaPlayer_now.duration - getGrossFade() * 1000))
-                            ) ||
-                    // Длина дорожки меньше или равна кроссфейду
-                    (mediaPlayer_now.duration <= (getGrossFade() * 1000) &&
-                            (mediaPlayer_now.currentPosition > (mediaPlayer_now.duration / 2))
-                            )
-            ) {
-                // Длина дорожки больше кроссфейда
-                if (mediaPlayer_now.duration > (getGrossFade() * 1000)){
-                    volume = (mediaPlayer_now.duration - mediaPlayer_now.currentPosition).toFloat() / (getGrossFade() * 1000).toFloat()
-                    // Запустить следующий трек
-                    if (tracks[nextTrackId(id_track_now)].status == Track.STATUS_STOP) {
-                        tracks[nextTrackId(id_track_now)].status = Track.STATUS_PLAY
-                    }
-                }
-                // Длина дорожки меньше или равна кроссфейду
-                else{
-                    volume = (mediaPlayer_now.duration - mediaPlayer_now.currentPosition).toFloat() / (mediaPlayer_now.duration / 2).toFloat()
-                    // Запустить следующий трек
-                    if (tracks[nextTrackId(id_track_now)].status == Track.STATUS_STOP) {
-                        tracks[nextTrackId(id_track_now)].status = Track.STATUS_PLAY
-                    }
+            else if (mediaPlayer_now.currentPosition >= (mediaPlayer_now.duration - crossfade_value)) {
+                volume = (mediaPlayer_now.duration - mediaPlayer_now.currentPosition).toFloat() / crossfade_value.toFloat()
+                volume = volume * volume
+                // Запустить следующий трек
+                if (tracks[nextTrackId(id_track_now)].status == Track.STATUS_STOP) {
+                    tracks[nextTrackId(id_track_now)].status = Track.STATUS_PAUSE
+                    mediaPlayer_next.seekTo(0)
                 }
                 mediaPlayer_now.setVolume(volume, volume)
                 if (mediaPlayer_next.isPlaying) {
@@ -333,84 +309,73 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Запустить / Поставить на паузу
-        if (id == id_track_now){
-            if (tracks[id].status == Track.STATUS_PLAY){
-                // Запускает текущий трек
-                if (!mediaPlayer_now.isPlaying){
-                    mediaPlayer_now.start()
-                    handler.postDelayed(tracks[id_track_now].runnable, 0)
-                }
-                // Запускает следующий трек
-                if (!mediaPlayer_next.isPlaying){
-                    if (tracks[nextTrackId(id)].status == Track.STATUS_PLAY){
-                        mediaPlayer_next.start()
-                        handler.postDelayed(tracks[nextTrackId(id_track_now)].runnable, 0)
-                    }
-                }
-            }else if (tracks[id].status == Track.STATUS_PAUSE){
-                // Ставит на паузу текущий трек
-                if (mediaPlayer_now.isPlaying){
-                    mediaPlayer_now.pause()
-                    handler.removeCallbacks(tracks[id_track_now].runnable)
-                }
-                // Ставит на паузу следующий трек
-                if (mediaPlayer_next.isPlaying){
-                    if (tracks[nextTrackId(id_track_now)].status == Track.STATUS_PAUSE){
-                        mediaPlayer_next.pause()
-                        handler.removeCallbacks(tracks[nextTrackId(id_track_now)].runnable)
-                    }
-                }
+        // Для текущего трека
+        if (playing && (tracks[id_track_now].status != Track.STATUS_PLAY)){
+            tracks[id_track_now].status = Track.STATUS_PLAY
+            mediaPlayer_now.start()
+        }else if (!playing && (tracks[id_track_now].status != Track.STATUS_PAUSE)){
+            tracks[id_track_now].status = Track.STATUS_PAUSE
+            mediaPlayer_now.pause()
+        }
+
+        // Для следующего трека
+        if ((tracks[nextTrackId(id_track_now)].status == Track.STATUS_PAUSE) ||
+            (tracks[nextTrackId(id_track_now)].status == Track.STATUS_PLAY)){
+            if (playing && (tracks[nextTrackId(id_track_now)].status != Track.STATUS_PLAY)){
+                tracks[nextTrackId(id_track_now)].status = Track.STATUS_PLAY
+                mediaPlayer_next.start()
+            }else if (!playing && (tracks[nextTrackId(id_track_now)].status != Track.STATUS_PAUSE)){
+                tracks[nextTrackId(id_track_now)].status = Track.STATUS_PAUSE
+                mediaPlayer_next.pause()
             }
         }
 
 
         //-------------------------- Time line --------------------------
-        var progress_track = 0f
-        if (id == id_track_now) {
-            progress_track = (mediaPlayer_now.currentPosition.toFloat() * 100 / mediaPlayer_now.duration.toFloat())
-        } else if (id == nextTrackId(id_track_now)) {
-            progress_track = (mediaPlayer_next.currentPosition.toFloat() * 100 / mediaPlayer_next.duration.toFloat())
-        }
-        val la = LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                progress_track
-        )
-        tracks_items[id].time_line.setLayoutParams(la)
+        // Для текущего трека
+        setTimeLine(id_track_now, mediaPlayer_now.currentPosition, mediaPlayer_now.duration)
+        // Для следующего трека
+        setTimeLine(nextTrackId(id_track_now), mediaPlayer_next.currentPosition, mediaPlayer_next.duration)
         //---------------------------------------------------------------
-
-
-        // Запустить runnable
-        if (tracks[id].status == Track.STATUS_PLAY){
-            handler.postDelayed(tracks[id].runnable, 1)
-        } else if (tracks[id].status == Track.STATUS_PAUSE){
-            handler.removeCallbacks(tracks[id].runnable)
-        }
     }
 
     // Запустить следующий трек
     fun setNextTrack(){
+        if (!playing){return}
+
         //-------------------------- Time line --------------------------
         val la = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0f)
         tracks_items[id_track_now].time_line.setLayoutParams(la)
         //---------------------------------------------------------------
 
         // Останавливает первый трек
-        handler.removeCallbacks(tracks[id_track_now].runnable)
-        mediaPlayer_now.seekTo(0)
+        mediaPlayer_now.stop()
+        mediaPlayer_now.release()
         tracks[id_track_now].status = Track.STATUS_STOP
 
         // Ставит на место первого следующий трек
         id_track_now = nextTrackId(id_track_now)
-        mediaPlayer_now.stop()
-        //mediaPlayer_now.release()
         mediaPlayer_now = mediaPlayer_next
         mediaPlayer_next = MediaPlayer.create(this, tracks[nextTrackId(id_track_now)].uri)
+
+        if (playing){
+            if (!mediaPlayer_now.isPlaying){
+                mediaPlayer_now.start()
+            }
+        }
 
         // Действие при завершении трека
         mediaPlayer_now.setOnCompletionListener{
             setNextTrack()
         }
+    }
+
+    fun setTimeLine(id: Int, currentPosition: Int, duration: Int){
+        var la = LinearLayout.LayoutParams(0,
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            (((currentPosition.toFloat() / 500).toInt() * 500) / duration.toFloat()) * 100
+        )
+        tracks_items[id].time_line.setLayoutParams(la)
     }
 
     // Возвращает id следующего трека
@@ -421,6 +386,7 @@ class MainActivity : AppCompatActivity() {
 
     // Задать воиспрозведения с первого трека
     fun startSettingsForAllTracks(){
+        currentPosition = 0
         id_track_now = 0
         tracks.forEachIndexed(){ i, track ->
             track.status = Track.STATUS_STOP

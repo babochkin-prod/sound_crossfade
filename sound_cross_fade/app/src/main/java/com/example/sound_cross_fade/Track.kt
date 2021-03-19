@@ -22,9 +22,6 @@ class Track {
         const val STATUS_STOP = 3
     }
 
-
-    lateinit var runnable: Runnable
-
     constructor(){
         this.uri = Uri.EMPTY
         this.name = "EMPTY"
